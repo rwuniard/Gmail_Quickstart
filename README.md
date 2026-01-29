@@ -1,14 +1,15 @@
-# Gmail Quickstart
+# Gmail Quickstart - LinkedIn Job Alert Parser
 
-A Python application that uses the Gmail API to read emails, with a focus on fetching unread LinkedIn Job Alert messages.
+A Python application that uses the Gmail API to read LinkedIn Job Alert emails and parse them into structured JSON format using Pydantic models.
 
 ## Features
 
-- OAuth2 authentication with Google
-- List Gmail labels
-- Fetch unread messages with full body content
-- Filter for LinkedIn Job Alerts specifically
+- OAuth2 authentication with Google Gmail API
+- Fetch unread LinkedIn Job Alert emails
+- Parse job listings from email body (title, company, location, URL)
+- Structured JSON output using Pydantic models
 - Handles multipart email formats (plain text and HTML)
+- Clean URLs with tracking parameters removed
 
 ## Requirements
 
@@ -29,9 +30,14 @@ A Python application that uses the Gmail API to read emails, with a focus on fet
    uv sync
    ```
 
+   Or add dependencies individually:
+   ```bash
+   uv add google-api-python-client google-auth-httplib2 google-auth-oauthlib pydantic beautifulsoup4
+   ```
+
    Or with pip:
    ```bash
-   pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
+   pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pydantic beautifulsoup4
    ```
 
 ## Google Cloud Setup
@@ -49,29 +55,79 @@ A Python application that uses the Gmail API to read emails, with a focus on fet
 
 ## Usage
 
-Run the application:
+Run the LinkedIn Job Alert parser:
 
 ```bash
-uv run quickstart.py
+uv run readgmail.py
 ```
 
 Or with Python directly:
 
 ```bash
-python quickstart.py
+python readgmail.py
 ```
 
 On first run, a browser window will open for Google authentication. After granting permissions, a `token.json` file will be created to store your credentials for future runs.
 
-## How It Works
+## Example Output
 
-1. **Authentication**: The app checks for existing credentials in `token.json`. If not found or expired, it initiates the OAuth flow.
+The application outputs structured JSON for each LinkedIn Job Alert email:
 
-2. **List Labels**: Displays all Gmail labels in your account.
+```json
+{
+  "id": "19c05dcea1a2afd7",
+  "subject": "Your job alert for Director of Engineering in United States",
+  "sender": "LinkedIn Job Alerts <jobalerts-noreply@linkedin.com>",
+  "date": "Sun, 26 Jan 2026 10:00:00 -0800",
+  "snippet": "New jobs match your preferences...",
+  "jobs": [
+    {
+      "title": "Senior Director of Engineering",
+      "company": "ClickUp",
+      "location": "United States",
+      "url": "https://www.linkedin.com/comm/jobs/view/4343659841"
+    },
+    {
+      "title": "Director, Software Engineering",
+      "company": "GoodLeap",
+      "location": "San Francisco, CA",
+      "url": "https://www.linkedin.com/comm/jobs/view/4366287547"
+    }
+  ]
+}
+```
 
-3. **Fetch Unread Messages**: Retrieves unread messages, filtering specifically for emails from LinkedIn Job Alerts.
+## Project Structure
 
-4. **Extract Content**: Parses email body from both simple and multipart messages, handling base64 decoding.
+```
+gmail_quickstart/
+├── models/
+│   └── linkedin.py      # Pydantic models (Job, LinkedInJobAlert)
+├── readgmail.py         # Main GmailClient class
+├── quickstart.py        # Original Gmail API quickstart example
+├── credentials.json     # OAuth client credentials (from Google Cloud)
+├── token.json           # User access/refresh tokens (auto-generated)
+├── pyproject.toml       # Project dependencies and metadata
+└── README.md
+```
+
+## Pydantic Models
+
+### Job
+Represents a single job listing:
+- `title`: Job title
+- `company`: Company name (optional)
+- `location`: Job location (optional)
+- `url`: LinkedIn job URL
+
+### LinkedInJobAlert
+Represents a parsed LinkedIn Job Alert email:
+- `id`: Gmail message ID
+- `subject`: Email subject
+- `sender`: Sender email address
+- `date`: Email date
+- `snippet`: Email preview snippet
+- `jobs`: List of `Job` objects
 
 ## Configuration
 
@@ -96,20 +152,36 @@ Modify the query in `get_unread_messages_from_LinkedIn_JobAlerts()` to filter di
 | `is:unread from:example@gmail.com` | Unread from specific sender |
 | `is:unread after:2024/01/01` | Unread after a date |
 
-## Files
+## Dependencies
 
-| File | Description |
-|------|-------------|
-| `quickstart.py` | Main application code |
-| `credentials.json` | OAuth client credentials (from Google Cloud) |
-| `token.json` | User access/refresh tokens (auto-generated) |
-| `pyproject.toml` | Project dependencies and metadata |
+| Package | Purpose |
+|---------|---------|
+| `google-api-python-client` | Google API client library |
+| `google-auth-httplib2` | HTTP transport for Google Auth |
+| `google-auth-oauthlib` | OAuth2 authentication flow |
+| `pydantic` | Data validation and JSON serialization |
+| `beautifulsoup4` | HTML parsing (optional, for HTML emails) |
 
 ## Security Notes
 
 - Never commit `credentials.json` or `token.json` to version control
 - Add them to `.gitignore`
 - The `token.json` contains sensitive refresh tokens that grant access to your Gmail
+
+## Deploying to Kubernetes
+
+For headless/background service deployment:
+
+1. Generate `token.json` locally by running the app once
+2. Create a Kubernetes Secret:
+   ```bash
+   kubectl create secret generic gmail-credentials \
+     --from-file=token.json \
+     --from-file=credentials.json
+   ```
+3. Mount the secret in your deployment
+
+The app automatically refreshes tokens, so as long as it runs periodically, credentials stay valid.
 
 ## License
 
