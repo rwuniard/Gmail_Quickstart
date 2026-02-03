@@ -27,7 +27,5 @@ Text_body.html
 
 # Log files
 *.log
-gmail_client.log
-
-# Old logger backup
+gmail_client.log# Old logger backup
 logger_config_old.py
