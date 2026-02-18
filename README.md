@@ -127,6 +127,11 @@ gmail_quickstart/
 │   ├── __init__.py              # Re-exports setup_logging
 │   ├── logger_config.py         # Logging configuration with python-json-logger
 │   └── example_logging.py       # Example demonstrating logging usage
+├── messaging/
+│   ├── __init__.py              # Messaging package
+│   └── producer.py              # ActiveMQ STOMP producer (sends job alerts to queue)
+├── activeMQ deployment script/
+│   └── deploy_activeMQ_docker.sh  # Script to run ActiveMQ Artemis in Docker
 ├── readgmail.py                 # Main GmailClient class
 ├── quickstart.py                # Original Gmail API quickstart example
 ├── .env                         # Environment variables (create from .env.example)
@@ -157,6 +162,66 @@ Represents a parsed LinkedIn Job Alert email:
 - `date`: Email date
 - `snippet`: Email preview snippet
 - `jobs`: List of `Job` objects
+
+## Messaging (ActiveMQ)
+
+Parsed job alerts are sent to an ActiveMQ queue using the STOMP protocol via the `messaging` package.
+
+### Producer
+
+`messaging/producer.py` provides a `Producer` class that connects to ActiveMQ Artemis and sends messages to a configured queue:
+
+```python
+from messaging.producer import Producer
+
+producer = Producer(
+    host=os.getenv('HOST'),
+    port=int(os.getenv('PORT')),
+    username=os.getenv('USERNAME'),
+    password=os.getenv('PASSWORD'),
+    destination=os.getenv('DESTINATION')
+)
+producer.send_message(json_payload)
+producer.close_connection()
+```
+
+Run standalone for testing:
+```bash
+uv run python -m messaging.producer
+```
+
+### ActiveMQ Artemis — Docker Setup
+
+Start a local ActiveMQ Artemis broker:
+
+```bash
+bash "activeMQ deployment script/deploy_activeMQ_docker.sh"
+```
+
+This runs:
+```bash
+docker pull apache/activemq-artemis
+docker run -d --name activemq-artemis -p 61616:61616 -p 8161:8161 apache/activemq-artemis
+```
+
+| Port | Purpose |
+|------|---------|
+| `61616` | STOMP/messaging protocol |
+| `8161` | Web console (`http://localhost:8161`) |
+
+Default credentials for the web console: `artemis` / `artemis`
+
+### ActiveMQ Environment Variables
+
+Add to your `.env`:
+
+```bash
+HOST=localhost
+PORT=61616
+USERNAME=artemis
+PASSWORD=artemis
+DESTINATION=/queue/linkedin_jobs
+```
 
 ## Configuration
 
