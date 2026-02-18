@@ -1,4 +1,4 @@
-# Gmail Quickstart - LinkedIn Job Alert Parser
+# Gmail Linkedin Job Alerts - LinkedIn Job Alert Parser
 
 A Python application that uses the Gmail API to read LinkedIn Job Alert emails and parse them into structured JSON format using Pydantic models.
 
