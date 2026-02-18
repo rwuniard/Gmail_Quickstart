@@ -11,8 +11,8 @@ import base64
 import re
 from typing import List
 from bs4 import BeautifulSoup
-from models.linkedin import Job, LinkedInJobAlert
-from logger_config import setup_logging
+from models import Job, LinkedInJobAlert
+from logger import setup_logging
 
 # Load environment variables from .env file
 load_dotenv()

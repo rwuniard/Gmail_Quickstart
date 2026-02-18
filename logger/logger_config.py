@@ -4,6 +4,7 @@ Reads configuration from environment variables.
 """
 
 import logging
+from pickle import NONE
 import sys
 import os
 from typing import Optional
@@ -66,15 +67,12 @@ class Log:
         valid_formats = {'json', 'text', 'dual'}
         return fmt_str.lower() if fmt_str.lower() in valid_formats else 'dual'
     
-    def setup(self) -> logging.Logger:
+    def setup(self) -> None:
         """
         Configure logging based on settings.
-        
-        Returns:
-            Logger instance for the calling module
         """
         if self._configured:
-            return logging.getLogger()
+            return
         
         # Get root logger
         root_logger = logging.getLogger()
@@ -105,7 +103,6 @@ class Log:
             }
         )
         
-        return root_logger
     
     def _add_json_handler(self, logger: logging.Logger):
         """Add JSON formatter handler to stdout using python-json-logger."""
@@ -167,7 +164,7 @@ def setup_logging(
     log_level: Optional[str] = None,
     log_format: Optional[str] = None,
     environment: Optional[str] = None
-) -> logging.Logger:
+) -> None:
     """
     Convenience function to setup logging.
     
@@ -176,8 +173,6 @@ def setup_logging(
         log_format: Output format ('json', 'text', or 'dual')
         environment: 'development' or 'production'
     
-    Returns:
-        Root logger instance
         
     Example:
         >>> from logger_config_v2 import setup_logging
@@ -186,4 +181,4 @@ def setup_logging(
         >>> logger.info("Hello", extra={'user_id': 123})
     """
     log = Log(log_level=log_level, log_format=log_format, environment=environment)
-    return log.setup()
+    log.setup()
