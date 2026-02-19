@@ -1,45 +1,19 @@
-import json
-import stomp
 from dotenv import load_dotenv
 import os
 import uuid
-import time
-import threading
+
 from logger import setup_logging
 import logging
+
+from proton import Message, Delivery
+from proton.utils import BlockingConnection, SendException
+import json
+
 
 setup_logging()
 # Get logger for this module
 logger = logging.getLogger(__name__)
 
-
-class ReceiptListener(stomp.ConnectionListener):
-    """
-    Listener for receipt messages from ActiveMQ.
-    This is used to ensure the message is delivered to the queue.
-    If the message is not delivered to the queue, the listener will throw an error.
-    If the message is delivered to the queue, the listener will print the message.
-    If the connection is disconnected, the listener will print a message.
-    If the connection is error, the listener will print a message.
-    If the connection is disconnected, the listener will print a message.
-    """
-
-    # Thread to wait for the receipt message
-    def __init__(self, thread):
-        self.thread = thread
-
-    def on_receipt(self, frame):
-        logger.info(f"ReceiptListener Receipt received: {frame.body}, Receipt ID: {frame.headers['receipt-id']}")
-        self.thread.set() # Set the thread to True, unblock the thread
-
-    def on_error(self, frame):
-        logger.error(f"ReceiptListener Error: {frame.body}")
-        logger.error(f"Receipt ID: {frame.headers['receipt-id']}")
-        self.thread.set() # Set the thread to True, unblock the thread
-
-    def on_disconnected(self):
-        logger.debug("ReceiptListener on Disconnect: Disconnected from ActiveMQ")
-        self.thread.set() # Set the thread to True, unblock the thread
 
 
 
@@ -49,7 +23,7 @@ class Producer:
     """
 
 
-    def __init__(self, host: str, port: int, username: str, password: str, destination: str):
+    def __init__(self, host: str, port: int, username: str, password: str, address: str, queue: str):
         """
         Initialize the Producer class.
 
@@ -68,36 +42,55 @@ class Producer:
         self.port = port
         self.username = username
         self.password = password
-        self.destination = destination
+        self.address = address
+        self.queue = queue
         # Create a connection to ActiveMQ
-        self.conn = stomp.Connection([(self.host, self.port)])
-        # Connect to ActiveMQ
-        self.conn.connect(self.username, self.password, wait=True)
-        logger.info("Connected to ActiveMQ")
-        # Create a thread to wait for the receipt message
-        self.thread = threading.Event()
-        # Set the listener for receipt messages and pass the thread to the listener
-        self.conn.set_listener('', ReceiptListener(self.thread))
-        logger.info("Listener set for receipt messages")
-    
-    
+        self.url = f"amqp://{self.username}:{self.password}@{self.host}:{self.port}"
+        self.conn = BlockingConnection(self.url)
+        self.amqp_destination = f"{self.address}::{self.queue}"
+        self.sender = self.conn.create_sender(self.amqp_destination)
+        logger.info("Connected to ActiveMQ via AMQP")
+
     def send_message(self, message: str):
         """
         Send a message to the ActiveMQ queue.
+        Message is usually a JSON string.
 
         Args:
             message: The message to send to the ActiveMQ queue.
 
         Returns:
             None
+
+        Raises:
+            SendException: If the message is not successfully sent to the ActiveMQ queue.
+            Exception: If the message is not successfully sent to the ActiveMQ queue. It could be a network error, a timeout, etc.
         """
-        logger.info(f"Sending message to ActiveMQ: {message}")
-        self.conn.send(body=message, destination=self.destination, headers={'receipt': str(uuid.uuid4())})
-        # Wait for the receipt message
-        self.thread.wait(timeout = 5)
-        # Clear the thread, so it can be used again
-        self.thread.clear()
-        logger.info(f"Message sent to ActiveMQ: {message}")
+        try:
+            msg = Message(body=json.dumps(message), properties={'content-type': 'application/json'})
+            msg.id = str(uuid.uuid4())
+            delivery = self.sender.send(msg)
+            if delivery.remote_state == Delivery.MODIFIED:
+                logger.warning(
+                    f"Message sent to ActiveMQ but the message was modified. "
+                    f"Delivery body: {delivery.body}, "
+                    f"delivery state: {delivery.remote_state}, "
+                    f"message id: {delivery.message.id}"
+                )
+            logger.info("Message sent to ActiveMQ")
+        except SendException as e:
+            logger.error(f"Error sending message to ActiveMQ: {e}, "
+                f"Delivery body: {delivery.body}, "
+                f"delivery state: {delivery.remote_state}, "
+                f"message id: {delivery.message.id}"
+            )
+            # raise the exception to the caller to handle the retry
+            raise e
+        except Exception as e:
+            logger.error(f"Error sending message to ActiveMQ: {e}")
+            raise e
+
+
 
     def close_connection(self):
         """
@@ -109,32 +102,48 @@ class Producer:
         Returns:
             None
         """
-        self.conn.disconnect()
+        self.sender.close()
+        logger.info("Sender closed")
+        self.conn.close()
         logger.info("Connection closed")
 
 
 
 
 def main():
+    """
+    Main function to send messages to ActiveMQ.
+    """
+    import time
     load_dotenv()
     HOST = os.getenv('HOST')
     PORT = os.getenv('PORT')
     USERNAME = os.getenv('USERNAME')
     PASSWORD = os.getenv('PASSWORD')
-    DESTINATION = '/queue/test3'
+    ADDRESS = os.getenv('ADDRESS')
+    QUEUE = os.getenv('QUEUE')
 
     producer = Producer(
         host=HOST, 
         port=PORT, 
         username=USERNAME, 
         password=PASSWORD, 
-        destination=DESTINATION)
+        address=ADDRESS,
+        queue=QUEUE)
 
-    producer.send_message("Hello, from Producer3!")
-
-    producer.send_message("Hello, from Producer4!")
-# Clear the thread, so it can be used again
-    producer.close_connection()
+    try:
+        for i in range(10):
+            producer.send_message(f"Hello, from Producer {i}!")
+    except SendException as e:
+        logger.error(f"Error sending message to ActiveMQ: {e}")
+        # retry sending the message that is failing
+    except Exception as e:
+        logger.error(f"Error sending message to ActiveMQ: {e}")
+        # retry sending the message that is failing
+        
+    finally:
+        producer.close_connection()
+        logger.info("Connection closed")
 
 if __name__ == "__main__":
     main()

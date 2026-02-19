@@ -15,9 +15,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
-
 def main():
     """
     Main function to send the unread messages from the Gmail API to the ActiveMQ queue
