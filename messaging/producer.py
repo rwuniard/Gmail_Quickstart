@@ -67,7 +67,7 @@ class Producer:
             Exception: If the message is not successfully sent to the ActiveMQ queue. It could be a network error, a timeout, etc.
         """
         try:
-            msg = Message(body=json.dumps(message), properties={'content-type': 'application/json'})
+            msg = Message(body=message, properties={'content-type': 'application/json'})
             msg.id = str(uuid.uuid4())
             delivery = self.sender.send(msg)
             if delivery.remote_state == Delivery.MODIFIED:

@@ -28,7 +28,8 @@ def main():
         port=int(os.getenv('PORT')),
         username=os.getenv('USERNAME'),
         password=os.getenv('PASSWORD'),
-        destination=os.getenv('DESTINATION')
+        address=os.getenv('ADDRESS'),
+        queue=os.getenv('QUEUE')
     )
 
     # Get the unread messages from the Gmail API
